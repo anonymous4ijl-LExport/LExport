@@ -1,5 +1,5 @@
 """
-LP — Wiktionary converter
+LP - NooJ .dic dictionary file.
 """
 
 import io
@@ -10,927 +10,1230 @@ import streamlit as st
 from lp_utils import (
     require_xml, sidebar_file_status, tag_selector, show_sample_values,
     wizard_progress, nav_buttons, collect_child_tags, get_unique_text_values,
-    get_unique_attr_values, sample_entries, find_text, get_elem_plain_text,
-    collect_corpus_ids, ensure_period, close_unbalanced, bold_lemma,
-    normalize_lemma, to_relative_xpath, validate_field_coverage,
-    render_coverage_report, iter_path, get_field_value, get_unique_field_values,
-    collect_element_attrs, parse_field_spec,
+    sample_entries, find_text, get_elem_plain_text, get_unique_attr_values,
+    get_field_value, get_unique_field_values, collect_element_attrs,
+    to_relative_xpath,
 )
 
-st.set_page_config(page_title="LP — Wiktionary", page_icon="📖", layout="wide")
-
-def _walk_paths(elem, prefix=None):
-    for child in elem:
-        path = (prefix or []) + [child.tag]
-        yield path
-        yield from _walk_paths(child, path)
+st.set_page_config(page_title="LExport — NooJ", page_icon="📝", layout="wide")
 sidebar_file_status()
 root, fname = require_xml()
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Session state for this page
+# Session-state defaults
+# All keys prefixed with "nooj_" to avoid collisions with other converters
 # ─────────────────────────────────────────────────────────────────────────────
-WIKT_DEFAULTS = {
-    "wikt_step": 0,
-    "wikt_lang_name": "",
-    "wikt_lang_code": "",
-    "wikt_entry_tag": "",
-    "wikt_lemma_path": "",
-    "wikt_ipa_path": "",
-    "wikt_citation_path": "",
-    "wikt_det_prefixes": "",
-    "wikt_pos_path": "",
-    "wikt_pos_labels": {},
-    "wikt_verb_transitivity": {},
-    "wikt_pos_skip": {},
-    "wikt_sense_path": "",
-    "wikt_subsense_path": "",
-    "wikt_def_path": "",
-    "wikt_def_lang_attr": "",
-    "wikt_def_lang_value": "",
-    "wikt_sem_label_path": "",
-    "wikt_sem_label_lang_attr": "",
-    "wikt_sem_label_lang_value": "",
-    "wikt_sem_label_map": {},
-    "wikt_example_path": "",
-    "wikt_corpus_link_path": "",
-    "wikt_ex_text_path": "",
-    "wikt_ex_lang_attr": "",
-    "wikt_ex_mlv_lang_value": "",
-    "wikt_ex_eng_lang_value": "",
-    "wikt_ex_translation_path": "",
-    "wikt_ex_translation_lang_value": "",
-    "wikt_rel_path": "",
-    "wikt_rel_resolve_guid": False,
-    "wikt_rel_entry_id_attr": "id",
-    "wikt_rel_type_path": "",
-    "wikt_rel_target_path": "",
-    "wikt_synonym_value": "",
-    "wikt_antonym_value": "",
-    "wikt_etym_path": "",
-    "wikt_etym_source_attr": "",
-    "wikt_etym_comment_field_type": "",
-    "wikt_etym_form_path": "",
-    "wikt_etym_lang_path": "",
-    "wikt_corpus_sources": {},
-    "wikt_output": "",
+# ─────────────────────────────────────────────────────────────────────────────
+# NooJ language registry
+# Each entry: display_label -> {
+#   "author": str,
+#   "hints": {step_name: markdown_string}
+# }
+# The hints dict keys must match the STEPS list exactly.
+# Leave hints blank ("") to show nothing for that step.
+# ─────────────────────────────────────────────────────────────────────────────
+NOOJ_LANGUAGES = {
+    "Other": {
+        "author": "",
+        "hints": {},
+    },
+    "Arabic": {
+        "author": "Slim Mesfar, Université de Carthage",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Arabic (verbs)": {
+        "author": "Héla Fehri, Université de Gabès",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Armenian - Western": {
+        "author": "Anaïd Donabedian, INALCO",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Belarusian": {
+        "author": "Yury Hetsevich, Belarus Academy of Sciences",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Bulgarian": {
+        "author": "Svetla Koeva, Bulgaria Academy of Sciences",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Catalan": {
+        "author": "Judith Sastre, Autonomous University of Barcelona",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Chinese": {
+        "author": "Zhen Cai, Université de Franche-Comté",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Croatian": {
+        "author": "Kristina Kocijan, University of Zagreb",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "English": {
+        "author": "Max Silberztein, Université de Franche-Comté",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Farsi (Persian)": {
+        "author": "Marzieh Rabiei, Université de Franche-Comté",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "French": {
+        "author": "Max Silberztein, Université de Franche-Comté",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "German": {
+        "author": "Ralph Mueller, University of Zurich",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Greek": {
+        "author": "Zoe Gavriilidou, University of Thrace",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Hebrew": {
+        "author": "Yaakov Bentolila, Negev University",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Hungarian": {
+        "author": "Tamas Varadi, Hungarian Academy of Sciences",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Indonesian": {
+        "author": "Prihantoro, Lancaster University",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Italian": {
+        "author": "Simonetta Vietri, University of Salerne",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Japanese": {
+        "author": "Valérie Collec-Clerc, Aix-Marseille University",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Kabyle": {
+        "author": "Hamid Annouz, INALCO",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Kiswahili": {
+        "author": "Mathieu Roy, DL2A Buluu Publishing",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Middle French": {
+        "author": "Mourad Aouini, CNRS UPS 2259",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Mwotlap": {
+        "author": "Fabio Meroni, Bergamo University",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "ADJ Adjective ADV Adverb COORD Coordinator DEI Deictic DIR Directional INT Interjection LOC Locative N Noun NUM Numeral PART Particle POSS Possessive classifier POSTV Postverb PRO Pronoun INTENS Intensifier REL Relativizer SUB Subordinator TAM Tense, Aspect, Mood markers V Verb DET Determiner POSS Possessive Classifier TOP Clause topicalisers QTF Quantifiers",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Polish": {
+        "author": "Krzysztof Bogacki, Warsaw University",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Portuguese": {
+        "author": "Anabela Barreiro, INESC-ID Lisbon",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Quechua": {
+        "author": "Maximiliano Duran, Université de Franche-Comté",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Romanian": {
+        "author": "Maria-Diana Manescu, Politehnica University of Bucharest",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Russian": {
+        "author": "Vincent Benet, INALCO",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Serbian": {
+        "author": "Dusko Vitas, University of Belgrad",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Slovenian": {
+        "author": "Kaja Dobrovoljc, University of Ljubljana",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Spanish - Spain": {
+        "author": "Xavier Blanco, Autonomous University of Barcelona",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Spanish - Argentina": {
+        "author": "Andrea Rodrigo, University of Rosario",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Turkish": {
+        "author": "Ümit Mersinli, TNC",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Ukrainian": {
+        "author": "Olena Saint-Joanis, Université de Franche-Comté",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
+    "Vietnamese": {
+        "author": "Philippe Lambert, Université de Lorraine ; Nicolas Boffo, Communauté Informatique au sein du Ministère de l'intérieur",
+        "hints": {
+            "Entry & Lemma": "",
+            "POS mapping": "",
+
+            "FLX= rules": "",
+            "DRV= rules": "",
+
+        },
+    },
 }
-for k, v in WIKT_DEFAULTS.items():
+
+
+def hint_box(step_name):
+    """
+    Display a language-specific hint box for the current step, if one exists.
+    Called at the top of each step section.
+    """
+    lang = st.session_state.get("nooj_language", "")
+    if not lang or lang not in NOOJ_LANGUAGES:
+        return
+    lang_data = NOOJ_LANGUAGES[lang]
+    hint = lang_data["hints"].get(step_name, "")
+    if hint:
+        st.info(f"💡 **{lang} guidance** ({lang_data['author']})\n\n{hint}")
+
+
+NOOJ_DEFAULTS = {
+    "nooj_step": 0,
+    "nooj_language": "",        # selected NooJ language key
+    "nooj_entry_tag": "",
+    "nooj_lemma_path": "",
+    "nooj_citation_path": "",
+    "nooj_pos_path": "",
+    "nooj_pos_attr": "",         # e.g. "value" for LIFT grammatical-info@value
+    "nooj_pos_map": {},          # xml_code -> nooj_tag string
+    "nooj_sense_tag": "",        # e.g. "Sens" or "sense" (LIFT)
+
+    # Subcategory flags: list of rule dicts
+    # Each rule: {
+    #   "pos_scope": [list of xml pos codes] or [] for all,
+    #   "criterion": "node"|"starts"|"ends"|"regexp",
+    #   "node_tag": str,          # for criterion=="node"
+    #   "node_lang_attr": str,
+    #   "node_lang_val": str,
+    #   "node_value_map": {val: nooj_flag},  # e.g. {"Bot": "+Flora"}
+    #   "pattern": str,           # for starts/ends/regexp
+    #   "flag": str,              # e.g. "+UNAMB"
+    # }
+    "nooj_flag_rules": [],
+
+    # FLX rules: list of rule dicts
+    # Each rule: {
+    #   "pos_scope": [...],
+    #   "criterion": "node"|"starts"|"ends"|"regexp",
+    #   ... same fields as flag_rules but produces "+FLX=VALUE"
+    #   "node_value_map": {val: flx_value},  # e.g. {"vowel": "VE_N"}
+    #   "pattern": str,
+    #   "flx_value": str,
+    # }
+    "nooj_flx_rules": [],
+
+    # DRV rules — same structure as FLX rules
+    "nooj_drv_rules": [],
+
+    # Glosses: list of {tag, lang_attr, lang_val, nooj_key}
+    # e.g. {tag:"Glose", lang_attr:"langue", lang_val:"eng", nooj_key:"EN"}
+    "nooj_gloss_configs": [],
+
+    # Variants
+    "nooj_variant_path": "",     # tag wrapping each variant (e.g. Variante or variant)
+    "nooj_variant_form_path": "", # path to form text inside variant (e.g. ./form/text)
+    "nooj_variant_lang_attr": "", # lang attr on form element (LIFT: lang)
+    "nooj_variant_lang_val": "",  # lang value to select (LIFT: seh)
+    "nooj_variant_lemma_override": True,
+
+    # Sub-entries
+    "nooj_subentry_tag": "",
+    "nooj_subentry_lemma_path": "",
+    "nooj_subentry_pos_path": "",
+    "nooj_subentry_strip_prefix": True,  # strip "parentform-" prefix from sub-entry form
+
+    # Duplicate suppression
+    "nooj_dedup": True,
+
+    "nooj_output": "",
+}
+for k, v in NOOJ_DEFAULTS.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Conversion engine
 # ─────────────────────────────────────────────────────────────────────────────
-def get_corpus_citation(url, corpus_sources):
-    url = url.strip()
-    wikilink = f"([{url} read online])"
-    m = re.search(r'(pangloss-\d+)', url)
-    if m:
-        src = corpus_sources.get(m.group(1), {})
-        author_title = src.get("author_title", "").strip()
-        description = src.get("description", "").strip()
-        if author_title:
-            parts = [author_title] + ([description] if description else [])
-            return ". ".join(parts) + ". " + wikilink
-    return wikilink
 
+def clean_form(text):
+    text = re.sub(r"\[[^\]]*\]", "", text)
+    return text.replace("‹","").replace("›","").replace("~","").strip()
 
-def render_examples(sense_elem, lemma_base, cfg):
-    ex_tag          = cfg["wikt_example_path"]
-    corpus_tag      = cfg["wikt_corpus_link_path"]
-    text_tag        = cfg["wikt_ex_text_path"]
-    lang_attr       = cfg["wikt_ex_lang_attr"]
-    mlv_val         = cfg["wikt_ex_mlv_lang_value"]
-    eng_val         = cfg["wikt_ex_eng_lang_value"]
-    sources         = cfg["wikt_corpus_sources"]
-    transl_path     = cfg.get("wikt_ex_translation_path", "")
-    transl_lang_val = cfg.get("wikt_ex_translation_lang_value", "")
-
-    if not ex_tag:
-        return ""
-
-    lift_mode = bool(not corpus_tag and text_tag)
-
-    lines = []
-    for ex in sense_elem.findall(to_relative_xpath(ex_tag)):
-        if not lift_mode:
-            lien = ex.find(corpus_tag) if corpus_tag else None
-            if lien is None:
+def apply_criterion(criterion, pattern, form, entry_elem, node_tag,
+                    node_lang_attr, node_lang_val, node_value_map):
+    """
+    Returns a list of matched values (strings) for a given rule criterion.
+    For node-based rules: returns all mapped values found in child nodes.
+    For starts/ends/regexp: returns [flag_value] if matched, else [].
+    """
+    if criterion == "node":
+        results = []
+        if not node_tag:
+            return results
+        for el in entry_elem.findall(f".//{node_tag}"):
+            if node_lang_attr and el.get(node_lang_attr) != node_lang_val:
                 continue
-            mlv_elem = eng_elem = None
-            if text_tag:
-                for el in ex.findall(to_relative_xpath(text_tag)):
-                    val = el.get(lang_attr, "")
-                    if val == mlv_val and mlv_elem is None: mlv_elem = el
-                    if val == eng_val and eng_elem is None: eng_elem = el
-            citation = get_corpus_citation(lien.text or "", sources)
-            mlv_text = get_elem_plain_text(mlv_elem).strip() if mlv_elem is not None else ""
-            eng_text = get_elem_plain_text(eng_elem).strip() if eng_elem is not None else ""
-            lines.append(f"#*: {citation}")
-            if mlv_text: lines.append(f"#*: {bold_lemma(mlv_text, lemma_base)}")
-            if eng_text: lines.append(f"#*: {eng_text}")
-        else:
-            # LIFT mode: lang attr is on the container element,
-            # not on the leaf text element. Split path into container + leaf.
-            def _split(p):
-                if not p: return None, p
-                stripped = p.lstrip(".").lstrip("/")
-                if "/" not in stripped: return None, p
-                container, leaf = p.rsplit("/", 1)
-                container = None if (not container or container == ".") else container
-                return container, leaf
-            src_container, src_leaf = _split(text_tag)
-            src_text = ""
-            if src_container:
-                for form in ex.findall(to_relative_xpath(src_container)):
-                    if not lang_attr or form.get(lang_attr) == mlv_val:
-                        t = form.find(src_leaf) if src_leaf else form
-                        src_text = get_elem_plain_text(t).strip() if t is not None else ""
-                        if src_text: break
-            else:
-                el = ex.find(to_relative_xpath(text_tag))
-                src_text = get_elem_plain_text(el).strip() if el is not None else ""
-            if not src_text:
-                continue
-            tr_text = ""
-            if transl_path:
-                tr_container, tr_leaf = _split(transl_path)
-                if tr_container:
-                    for form in ex.findall(to_relative_xpath(tr_container)):
-                        if not lang_attr or not transl_lang_val or form.get(lang_attr) == transl_lang_val:
-                            t = form.find(tr_leaf) if tr_leaf else form
-                            tr_text = get_elem_plain_text(t).strip() if t is not None else ""
-                            if tr_text: break
-                else:
-                    el = ex.find(to_relative_xpath(transl_path))
-                    tr_text = get_elem_plain_text(el).strip() if el is not None else ""
-            lines.append(f"#*: {bold_lemma(src_text, lemma_base)}")
-            if tr_text: lines.append(f"#*: {tr_text}")
-    return "\n".join(lines)
+            val = el.text.strip() if el.text else ""
+            if val in node_value_map:
+                results.append(node_value_map[val])
+        return results
 
+    elif criterion == "starts":
+        if pattern and form.startswith(pattern):
+            return [pattern]
+        return []
+
+    elif criterion == "ends":
+        if pattern and form.endswith(pattern):
+            return [pattern]
+        return []
+
+    elif criterion == "regexp":
+        if pattern:
+            m = re.search(pattern, form)
+            if m:
+                return [m.group(0)]
+        return []
+
+    return []
 
 def run_conversion(root, cfg):
-    out = io.StringIO()
+    out_lines = []
+    seen = set()
 
-    lang_name    = cfg["wikt_lang_name"]
-    lang_code    = cfg["wikt_lang_code"]
-    entry_tag    = cfg["wikt_entry_tag"]
-    lemma_path   = cfg["wikt_lemma_path"]
-    ipa_path     = cfg["wikt_ipa_path"]
-    cit_path     = cfg["wikt_citation_path"]
-    det_prefixes = [p.strip() for p in cfg["wikt_det_prefixes"].split(",") if p.strip()]
-    pos_path     = cfg["wikt_pos_path"]
-    pos_labels   = cfg["wikt_pos_labels"]
-    verb_trans   = cfg["wikt_verb_transitivity"]
-    sense_path   = cfg["wikt_sense_path"]
-    def_tag      = cfg["wikt_def_path"]
-    def_la       = cfg["wikt_def_lang_attr"]
-    def_lv       = cfg["wikt_def_lang_value"]
-    sem_tag      = cfg["wikt_sem_label_path"]
-    sem_la       = cfg["wikt_sem_label_lang_attr"]
-    sem_lv       = cfg["wikt_sem_label_lang_value"]
-    sem_map      = cfg["wikt_sem_label_map"]
-    rel_path     = cfg["wikt_rel_path"]
-    rel_type     = cfg["wikt_rel_type_path"]
-    rel_tgt      = cfg["wikt_rel_target_path"]
-    syn_val      = cfg["wikt_synonym_value"]
-    ant_val      = cfg["wikt_antonym_value"]
-    etym_path    = cfg["wikt_etym_path"]
-    etym_form    = cfg["wikt_etym_form_path"]
-    etym_lang    = cfg["wikt_etym_lang_path"]
-    ref_templates       = cfg.get("wikt_reference_templates", [])
-    subsense_path       = cfg.get("wikt_subsense_path", "")
-    ex_translation_path = cfg.get("wikt_ex_translation_path", "")
-    ex_transl_lang_val  = cfg.get("wikt_ex_translation_lang_value", "")
-    rel_resolve_guid    = cfg.get("wikt_rel_resolve_guid", False)
-    rel_entry_id_attr   = cfg.get("wikt_rel_entry_id_attr", "id")
-    etym_source_attr    = cfg.get("wikt_etym_source_attr", "")
-    etym_comment_field  = cfg.get("wikt_etym_comment_field_type", "")
+    entry_tag      = cfg["nooj_entry_tag"]
+    lemma_path     = cfg["nooj_lemma_path"]
+    citation_path  = cfg["nooj_citation_path"]
+    pos_path       = cfg["nooj_pos_path"]
+    pos_attr       = cfg.get("nooj_pos_attr", "")
+    pos_spec       = f"{pos_path}@{pos_attr}" if pos_attr else pos_path
+    pos_map        = cfg["nooj_pos_map"]
+    sense_tag      = cfg.get("nooj_sense_tag", "") or "Sens"
+    flag_rules     = cfg["nooj_flag_rules"]
+    flx_rules      = cfg["nooj_flx_rules"]
+    drv_rules      = cfg["nooj_drv_rules"]
+    gloss_configs  = cfg["nooj_gloss_configs"]
+    variant_path   = cfg["nooj_variant_path"]
+    variant_form_path = cfg.get("nooj_variant_form_path", "")
+    variant_lang_attr = cfg.get("nooj_variant_lang_attr", "")
+    variant_lang_val  = cfg.get("nooj_variant_lang_val", "")
+    variant_lemma_override = cfg["nooj_variant_lemma_override"]
+    subentry_tag   = cfg["nooj_subentry_tag"]
+    subentry_lemma = cfg["nooj_subentry_lemma_path"]
+    subentry_pos   = cfg["nooj_subentry_pos_path"]
+    subentry_strip = cfg["nooj_subentry_strip_prefix"]
+    dedup          = cfg["nooj_dedup"]
 
-    _guid_to_lemma = {}
-    if rel_resolve_guid and entry_tag:
-        for _e in root.iter(entry_tag):
-            _eid  = _e.get(rel_entry_id_attr, "")
-            _guid = _e.get("guid", "")
-            _xl   = _e.find(to_relative_xpath(lemma_path)) if lemma_path else None
-            _lem  = _xl.text.strip() if _xl is not None and _xl.text else ""
-            if _lem:
-                if _guid: _guid_to_lemma[_guid] = _lem
-                if _eid:  _guid_to_lemma[_eid]  = _lem
-                if "_" in _eid:
-                    _sfx = _eid.rsplit("_", 1)[-1]
-                    if _sfx: _guid_to_lemma[_sfx] = _lem
+    def get_glosses(elem):
+        parts = []
+        for gc in gloss_configs:
+            tag = gc.get("tag", "")
+            if not tag:
+                continue
+            # Support LIFT: gloss has a <text> child
+            text_subpath = gc.get("text_subpath", "")
+            for el in elem.findall(f".//{tag}"):
+                if gc["lang_attr"] and el.get(gc["lang_attr"]) != gc["lang_val"]:
+                    continue
+                if text_subpath:
+                    t = el.find(text_subpath)
+                    val = t.text.strip() if t is not None and t.text else ""
+                else:
+                    val = el.text.strip() if el.text else ""
+                if val:
+                    parts.append(f'+{gc["nooj_key"]}="{val}"')
+                break
+        return "".join(parts)
 
-    def get_gloss(d_elem):
-        if not def_tag:
-            return ""
-        for el in d_elem.findall(to_relative_xpath(def_tag)):
-            if not def_la or el.get(def_la) == def_lv:
-                raw = get_elem_plain_text(el).strip()
-                if raw:
-                    return ensure_period(close_unbalanced(
-                        close_unbalanced(re.sub(r"\s+", " ", raw), "(", ")"), "‹", "›"))
-        if subsense_path:
-            for ss in d_elem.findall(to_relative_xpath(subsense_path)):
-                for el in ss.findall(to_relative_xpath(def_tag)):
-                    if not def_la or el.get(def_la) == def_lv:
-                        raw = get_elem_plain_text(el).strip()
-                        if raw:
-                            return ensure_period(close_unbalanced(
-                                close_unbalanced(re.sub(r"\s+", " ", raw), "(", ")"), "‹", "›"))
+    def get_flags(pos_code, form, elem):
+        flags = []
+        for rule in flag_rules:
+            scope = rule.get("pos_scope", [])
+            if scope and pos_code not in scope:
+                continue
+            matches = apply_criterion(
+                rule["criterion"], rule.get("pattern",""), form, elem,
+                rule.get("node_tag",""), rule.get("node_lang_attr",""),
+                rule.get("node_lang_val",""), rule.get("node_value_map",{}),
+            )
+            flag = rule.get("flag","")
+            for _ in matches:
+                if flag and flag not in flags:
+                    flags.append(flag)
+            # For node rules with value maps, use the mapped value directly
+            if rule["criterion"] == "node":
+                for m in matches:
+                    if m not in flags:
+                        flags.append(m)
+                # Clear duplicates from the flag we added above
+                if flag in flags and matches:
+                    flags = [f for f in flags if f != flag] + [m for m in matches if m not in flags]
+        return "".join(flags)
+
+    def get_flx(pos_code, form, elem):
+        for rule in flx_rules:
+            scope = rule.get("pos_scope", [])
+            if scope and pos_code not in scope:
+                continue
+            matches = apply_criterion(
+                rule["criterion"], rule.get("pattern",""), form, elem,
+                rule.get("node_tag",""), rule.get("node_lang_attr",""),
+                rule.get("node_lang_val",""), rule.get("node_value_map",{}),
+            )
+            if matches:
+                val = rule.get("flx_value","") or matches[0]
+                return f"+FLX={val}" if val else ""
         return ""
 
-    def get_sem_labels(d_elem):
-        if not sem_tag:
-            return []
-        return [
-            sem_map[el.text.strip()]
-            for el in d_elem.findall(f".//{sem_tag}")
-            if (not sem_la or el.get(sem_la) == sem_lv)
-            and el.text and el.text.strip() in sem_map
-            and sem_map[el.text.strip()]
-        ]
-
-    def build_etymology(entry):
-        if not etym_path:
-            return ""
-        parts = []
-        for e in entry.findall(to_relative_xpath(etym_path)):
-            form = find_text(e, etym_form) if etym_form else ""
-            lang_raw = find_text(e, etym_lang) if etym_lang else ""
-            if not lang_raw and etym_source_attr:
-                lang_raw = e.get(etym_source_attr, "").strip()
-            if not form and etym_comment_field:
-                for fld in e.findall("field"):
-                    if fld.get("type") == etym_comment_field:
-                        fxt = fld.find("./form/text")
-                        if fxt is not None and fxt.text:
-                            form = fxt.text.strip()
-                            break
-            lang = lang_raw
-            if form:
-                parts.append(f"From {lang + ' ' if lang else ''}{{{{m|und|{form}}}}}")
-            elif lang:
-                parts.append(f"Borrowed from {lang}.")
-        return (", ".join(parts) + ".") if parts else ""
-
-    def sense_line(lb, gloss, ex):
-        return f"# {lb}{gloss}" + ("\n" + ex if ex else "")
-
-    def build_references_section(lemma, base):
-        """Build the ===References=== block from the user-configured list of
-        Wiktionary reference templates (Step 9 of the wizard).
-
-        Each template dict has "name", "template" (a string that may contain
-        the literal placeholders {lemma}, {base}, {lang_code}), and "enabled".
-        {base} falls back to {lemma} when there is no determinate base form
-        for this entry.
-
-        Substitution is done via plain text replacement (not str.format) so
-        that the template's own literal {{...}} wikitext braces are left
-        untouched.
-        """
-        fields = {
-            "{lemma}": lemma,
-            "{base}": base if base else lemma,
-            "{lang_code}": lang_code,
-        }
-        lines = []
-        for ref in ref_templates:
-            if not ref.get("enabled", True):
+    def get_drv(pos_code, form, elem):
+        for rule in drv_rules:
+            scope = rule.get("pos_scope", [])
+            if scope and pos_code not in scope:
                 continue
-            pattern = ref.get("template", "").strip()
-            if not pattern:
-                continue
-            rendered = pattern
-            for placeholder, value in fields.items():
-                rendered = rendered.replace(placeholder, value)
-            lines.append(f"* {rendered}")
-        if not lines:
-            return ""
-        return "===References===\n" + "\n".join(lines) + "\n"
+            matches = apply_criterion(
+                rule["criterion"], rule.get("pattern",""), form, elem,
+                rule.get("node_tag",""), rule.get("node_lang_attr",""),
+                rule.get("node_lang_val",""), rule.get("node_value_map",{}),
+            )
+            if matches:
+                val = rule.get("drv_value","") or matches[0]
+                return f"+DRV={val}" if val else ""
+        return ""
 
-    def write_pos_sections(page, verb_senses, other_groups, lang_code):
-        if verb_senses:
-            trans_set = {v[0] for v in verb_senses}
-            all_same  = len(trans_set) == 1
-            if all_same:
-                page += f"===Verb===\n{{{{head|{lang_code}|verb}}}} {{{{lb|en|{next(iter(trans_set))}}}}}\\n\\n"
-                for vl, labels, gloss, ex in verb_senses:
-                    lb = ("{{lb|en|" + "|".join(labels) + "}} ") if labels else ""
-                    page += sense_line(lb, gloss, ex) + "\n"
-            else:
-                page += f"===Verb===\n{{{{head|{lang_code}|verb}}}}\n\n"
-                for vl, labels, gloss, ex in verb_senses:
-                    lb = "{{lb|en|" + "|".join([vl] + labels) + "}} "
-                    page += sense_line(lb, gloss, ex) + "\n"
-            page += "\n"
+    def emit(form, nooj_tag, flags, glosses, flx, drv, lemma_override=None):
+        cleaned = clean_form(form)
+        if not cleaned:
+            return
+        info = nooj_tag + flags + glosses + flx + drv
+        dedup_key = f"{cleaned}|{lemma_override or ''}|{nooj_tag}|{flx}|{drv}"
+        if dedup and dedup_key in seen:
+            return
+        seen.add(dedup_key)
+        if lemma_override:
+            out_lines.append(f"{cleaned},{clean_form(lemma_override)},{info}")
+        else:
+            out_lines.append(f"{cleaned},{info}")
 
-        for pos_code, senses, _, __ in other_groups:
-            if not senses:
-                continue
-            pos_title, head_pos = pos_labels.get(pos_code, (pos_code, pos_code))
-            page += f"==={pos_title}===\n{{{{head|{lang_code}|{head_pos}}}}}\n\n"
-            for labels, gloss, ex in senses:
-                lb = ("{{lb|en|" + "|".join(labels) + "}} ") if labels else ""
-                page += sense_line(lb, gloss, ex) + "\n"
-            page += "\n"
-        return page
-
-    SEP = "\n" + "=" * 80 + "\n\n"
+    def process_entry_elem(elem, form, pos_code, citation="", lemma_override=None):
+        nooj_tag = pos_map.get(pos_code, "")
+        if not nooj_tag:
+            return
+        # Use configurable sense tag; fall back to direct entry if no senses found
+        senses = (elem.findall(f".//{sense_tag}") or [None])
+        for sense_ctx in senses:
+            ctx = sense_ctx if sense_ctx is not None else elem
+            flags   = get_flags(pos_code, form, ctx)
+            glosses = get_glosses(ctx)
+            flx     = get_flx(pos_code, form, ctx)
+            drv     = get_drv(pos_code, form, ctx)
+            emit(form, nooj_tag, flags, glosses, flx, drv, lemma_override)
 
     for entry in root.iter(entry_tag):
-        lemma = find_text(entry, lemma_path)
-        if not lemma:
+        form = find_text(entry, lemma_path)
+        if not form:
             continue
+        pos_code = get_field_value(entry, pos_spec) if pos_spec else ""
+        citation = find_text(entry, citation_path) if citation_path else ""
 
-        lemma_base = normalize_lemma(lemma)
-        ipa        = find_text(entry, ipa_path) if ipa_path else ""
-        citation   = find_text(entry, cit_path) if cit_path else ""
+        if pos_code:
+            process_entry_elem(entry, form, pos_code, citation)
 
-        has_det = False
-        det_prefix = None
-        if citation:
-            for prefix in det_prefixes:
-                if citation.lstrip("°").startswith(prefix):
-                    has_det = True
-                    det_prefix = prefix
-                    break
-
-        base = lemma_base if has_det else None
-
-        verb_senses    = []
-        verb_synonyms  = []
-        verb_antonyms  = []
-        other_groups   = []
-
-        # Build attr-based field specs for pos / relations
-        _pos_attr_val = cfg.get("wikt_pos_attr", "")
-        pos_spec = f"{pos_path}@{_pos_attr_val}" if _pos_attr_val else pos_path
-        _rel_type_attr_val = cfg.get("wikt_rel_type_attr", "")
-        _rel_tgt_attr_val  = cfg.get("wikt_rel_target_attr", "")
-        rel_type_spec = f"{rel_type}@{_rel_type_attr_val}" if _rel_type_attr_val else rel_type
-        rel_tgt_spec  = f"{rel_tgt}@{_rel_tgt_attr_val}"  if _rel_tgt_attr_val  else rel_tgt
-        _pos_skip = cfg.get("wikt_pos_skip", {})
-
-        for group in (entry.findall("./Groupe") or [entry]):
-            pos_code = get_field_value(group, pos_spec) if pos_spec else ""
-            if _pos_skip.get(pos_code, False):
-                continue
-            senses, synonyms, antonyms = [], [], []
-
-            for sens in (group.findall(to_relative_xpath(sense_path)) if sense_path else []):
-                gloss = get_gloss(sens)
-                if not gloss:
-                    continue
-                labels      = get_sem_labels(sens)
-                ex_wikitext = render_examples(sens, lemma_base, cfg)
-                senses.append((labels, gloss, ex_wikitext))
-
-                if rel_path:
-                    for rel in sens.findall(to_relative_xpath(rel_path)):
-                        typ = get_field_value(rel, rel_type_spec) if rel_type_spec else ""
-                        raw_tgt = get_field_value(rel, rel_tgt_spec) if rel_tgt_spec else ""
-                        if rel_resolve_guid and raw_tgt in _guid_to_lemma:
-                            tgt = _guid_to_lemma[raw_tgt]
-                        else:
-                            tgt = re.sub(r"[_‹›\[\]].*$", "", raw_tgt).strip()
-                        if typ == syn_val and tgt:
-                            synonyms.append(tgt)
-                        elif typ == ant_val and tgt:
-                            antonyms.append(tgt)
-
-            trans_label = verb_trans.get(pos_code, "none")
-            if trans_label != "none":
-                for labels, gloss, ex in senses:
-                    verb_senses.append((trans_label, labels, gloss, ex))
-                verb_synonyms.extend(synonyms)
-                verb_antonyms.extend(antonyms)
-            else:
-                other_groups.append((pos_code, senses, synonyms, antonyms))
-
-        if rel_path:
-            for rel in entry.findall(to_relative_xpath(rel_path)):
-                typ = get_field_value(rel, rel_type_spec) if rel_type_spec else ""
-                raw_tgt = get_field_value(rel, rel_tgt_spec) if rel_tgt_spec else ""
-                if rel_resolve_guid and raw_tgt in _guid_to_lemma:
-                    tgt = _guid_to_lemma[raw_tgt]
+        # Variants
+        if variant_path:
+            # Support both Mwotlap-style (./Lemme/variant_path) and
+            # LIFT-style (variant directly under entry with form[@lang]/text)
+            var_elems = (entry.findall(f"./Lemme/{variant_path}")
+                         or entry.findall(to_relative_xpath(variant_path)))
+            for var_el in var_elems:
+                if variant_form_path:
+                    # Split only when there are 2+ real tag components.
+                    # "./orth" -> (None, "./orth"); "./form/text" -> ("./form", "text")
+                    _vstrip = variant_form_path.lstrip(".").lstrip("/")
+                    if "/" in _vstrip:
+                        _fc, _fl = variant_form_path.rsplit("/", 1)
+                        _fc = None if (not _fc or _fc == ".") else _fc
+                    else:
+                        _fc, _fl = None, variant_form_path
+                    var_form = ""
+                    if _fc:
+                        for felem in var_el.findall(to_relative_xpath(_fc)):
+                            if variant_lang_attr and felem.get(variant_lang_attr) != variant_lang_val:
+                                continue
+                            leaf = felem.find(_fl) if _fl else felem
+                            var_form = (leaf.text or "").strip() if leaf is not None else ""
+                            if var_form: break
+                    else:
+                        _ve = var_el.find(to_relative_xpath(_fl)) if _fl else var_el
+                        var_form = (_ve.text or "").strip() if _ve is not None else ""
                 else:
-                    tgt = re.sub(r"[_‹›\[\]].*$", "", raw_tgt).strip()
-                if typ == syn_val and tgt:
-                    verb_synonyms.append(tgt)
-                elif typ == ant_val and tgt:
-                    verb_antonyms.append(tgt)
+                    var_form_el = var_el.find("ReprésentationDeForme") or var_el
+                    var_form = var_form_el.text.strip() if var_form_el.text else ""
+                if var_form and pos_code:
+                    process_entry_elem(
+                        entry, var_form, pos_code, citation,
+                        lemma_override=form if variant_lemma_override else None
+                    )
 
-        etym = build_etymology(entry)
+        # Groups (Groupe)
+        for group in entry.findall("Groupe"):
+            g_form_el = group.find("Lemme/ReprésentationDeForme")
+            g_form = g_form_el.text.strip() if g_form_el is not None and g_form_el.text else form
+            g_pos_el = group.find("ClasseGrammaticale")
+            g_pos = g_pos_el.text.strip() if g_pos_el is not None and g_pos_el.text else pos_code
+            g_cit_el = group.find("Lemme/FormeDeCitation")
+            g_cit = g_cit_el.text.strip() if g_cit_el is not None and g_cit_el.text else ""
+            if g_form and g_pos:
+                process_entry_elem(group, g_form, g_pos, g_cit)
+            # Group variants
+            if variant_path:
+                for var_el in group.findall(f"./Lemme/{variant_path}"):
+                    var_form_el = var_el.find("ReprésentationDeForme") or var_el
+                    var_form = var_form_el.text.strip() if var_form_el.text else ""
+                    if var_form and g_pos:
+                        process_entry_elem(
+                            group, var_form, g_pos, g_cit,
+                            lemma_override=g_form if variant_lemma_override else None
+                        )
 
-        def pron_block(ipa_str):
-            return f"===Pronunciation===\n* {{{{IPA|{lang_code}|/{ipa_str}/}}}}\n\n"
+        # Sub-entries
+        if subentry_tag:
+            for sous in entry.findall(f".//{subentry_tag}"):
+                s_form_el = sous.find(f".//{subentry_lemma}") if subentry_lemma else None
+                s_pos_el  = sous.find(f".//{subentry_pos}") if subentry_pos else None
+                s_form = s_form_el.text.strip() if s_form_el is not None and s_form_el.text else ""
+                s_pos  = s_pos_el.text.strip()  if s_pos_el  is not None and s_pos_el.text  else ""
+                if subentry_strip and "-" in s_form:
+                    s_form = s_form.split("-", 1)[1].strip()
+                if s_form and s_pos:
+                    process_entry_elem(sous, s_form, s_pos)
 
-        def rel_blocks(syns, ants):
-            s = ""
-            if syns:
-                s += "===Synonyms===\n" + ", ".join(f"{{{{l|{lang_code}|{x}}}}}" for x in sorted(set(syns))) + "\n\n"
-            if ants:
-                s += "===Antonyms===\n" + ", ".join(f"{{{{l|{lang_code}|{x}}}}}" for x in sorted(set(ants))) + "\n\n"
-            return s
+    return "\n".join(out_lines)
 
-        # ── Base form page ────────────────────────────────────────────────────
-        if has_det:
-            page = f"=={lang_name}==\n\n" + pron_block(ipa)
-            if etym:
-                page += f"===Etymology===\n{etym}\n\n"
-            page = write_pos_sections(page, verb_senses, other_groups, lang_code)
-            page += rel_blocks(verb_synonyms, verb_antonyms)
-            if page.strip():
-                page += build_references_section(lemma, base)
-                out.write(page + SEP)
+# ─────────────────────────────────────────────────────────────────────────────
+# Shared rule editor component
+# ─────────────────────────────────────────────────────────────────────────────
+def rule_editor(rules_key, label, value_field_label, value_field_key_suffix,
+                pos_options, child_tags, root):
+    """
+    Generic editor for flag / FLX / DRV rules.
+    Renders a list of rules with add/remove, persists to session_state[rules_key].
+    value_field_label: label for the output value field ("Flag", "FLX value", "DRV value")
+    """
+    rules = st.session_state[rules_key]
 
-            # Determinate form page
-            det_page = (
-                f"=={lang_name}==\n\n"
-                + pron_block(ipa)
-                + f"===Etymology===\nFrom {{{{affix|{lang_code}|{det_prefix}|{base}}}}}.\n\n"
-                + f"===Noun===\n{{{{head|{lang_code}|noun form}}}}\n\n"
-                + f"# {{{{form of|{lang_code}|Determinate form|{base}}}}}\n\n"
+    st.markdown(f"#### {label}")
+
+    CRITERIA = {
+        "node":   "📄 Node content (value of an XML tag)",
+        "starts": "▶️ Form starts with (string/prefix)",
+        "ends":   "◀️ Form ends with (string/suffix)",
+        "regexp": "🔍 Regexp match on form",
+    }
+
+    for i, rule in enumerate(rules):
+        with st.expander(f"Rule {i+1}: {rule.get('criterion','?')} → {rule.get('flag') or rule.get('flx_value') or rule.get('drv_value','?')}", expanded=True):
+            c1, c2 = st.columns([4, 1])
+            with c2:
+                if st.button("🗑 Remove", key=f"{rules_key}_rm_{i}"):
+                    rules.pop(i)
+                    st.session_state[rules_key] = rules
+                    st.rerun()
+
+            # POS scope
+            scope = st.multiselect(
+                "Apply to POS codes (leave empty = all)",
+                options=pos_options,
+                default=rule.get("pos_scope", []),
+                key=f"{rules_key}_scope_{i}",
             )
-            det_page += build_references_section(lemma, base)
-            out.write(det_page + SEP)
+            rule["pos_scope"] = scope
 
-        # ── Regular page ──────────────────────────────────────────────────────
-        else:
-            page = f"=={lang_name}==\n\n" + pron_block(ipa)
-            if etym:
-                page += f"===Etymology===\n{etym}\n\n"
-            page = write_pos_sections(page, verb_senses, other_groups, lang_code)
-            page += rel_blocks(verb_synonyms, verb_antonyms)
-            if page.strip():
-                page += build_references_section(lemma, None)
-                out.write(page + SEP)
+            # Criterion
+            crit = st.selectbox(
+                "Criterion",
+                list(CRITERIA.keys()),
+                index=list(CRITERIA.keys()).index(rule.get("criterion","node")),
+                format_func=lambda x: CRITERIA[x],
+                key=f"{rules_key}_crit_{i}",
+            )
+            rule["criterion"] = crit
 
-    return out.getvalue()
+            if crit == "node":
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    node_tag = st.selectbox(
+                        "XML tag to read",
+                        ["(none)"] + child_tags,
+                        index=(["(none)"] + child_tags).index(rule.get("node_tag","(none)"))
+                              if rule.get("node_tag","") in child_tags else 0,
+                        key=f"{rules_key}_ntag_{i}",
+                    )
+                    rule["node_tag"] = "" if node_tag == "(none)" else node_tag
 
+                with col2:
+                    # Language attribute filter
+                    node_lang_attr = st.text_input(
+                        "Language attr (optional)",
+                        value=rule.get("node_lang_attr",""),
+                        key=f"{rules_key}_nla_{i}",
+                        placeholder="",
+                    )
+                    rule["node_lang_attr"] = node_lang_attr
+
+                with col3:
+                    node_lang_val = st.text_input(
+                        "Language value",
+                        value=rule.get("node_lang_val",""),
+                        key=f"{rules_key}_nlv_{i}",
+                        placeholder="e.g. eng",
+                    )
+                    rule["node_lang_val"] = node_lang_val
+
+                # Collect unique values for this tag
+                if rule.get("node_tag"):
+                    unique_vals = set()
+                    for el in root.iter(rule["node_tag"]):
+                        if rule["node_lang_attr"] and el.get(rule["node_lang_attr"]) != rule["node_lang_val"]:
+                            continue
+                        if el.text:
+                            unique_vals.add(el.text.strip())
+                    unique_vals = sorted(unique_vals)
+                    st.markdown(f"**Found {len(unique_vals)} unique values.** Map each to a NooJ tag (leave blank to skip):")
+                    node_value_map = rule.get("node_value_map", {})
+                    cols = st.columns(3)
+                    for j, val in enumerate(unique_vals[:30]):  # cap at 30 for readability
+                        with cols[j % 3]:
+                            mapped = st.text_input(
+                                f"`{val}`",
+                                value=node_value_map.get(val, ""),
+                                key=f"{rules_key}_nvm_{i}_{j}",
+                                placeholder="",
+                            )
+                            node_value_map[val] = mapped
+                    if len(unique_vals) > 30:
+                        st.caption(f"…and {len(unique_vals)-30} more values. Edit the config directly for full coverage.")
+                    rule["node_value_map"] = node_value_map
+                    # For node rules the "flag" field is unused (values come from map)
+                    rule["flag"] = ""
+
+            else:
+                # starts / ends / regexp
+                pattern = st.text_input(
+                    "Pattern (string or regexp)",
+                    value=rule.get("pattern",""),
+                    key=f"{rules_key}_pat_{i}",
+                    placeholder="e.g. ^[aeiou]  |  \\[",
+                )
+                rule["pattern"] = pattern
+
+                out_val = st.text_input(
+                    value_field_label,
+                    value=rule.get("flag") or rule.get("flx_value") or rule.get("drv_value",""),
+                    key=f"{rules_key}_val_{i}",
+                    placeholder="",
+                )
+                # Store under the right key depending on what we're editing
+                if value_field_key_suffix == "flag":
+                    rule["flag"] = out_val
+                elif value_field_key_suffix == "flx":
+                    rule["flx_value"] = out_val
+                elif value_field_key_suffix == "drv":
+                    rule["drv_value"] = out_val
+
+    st.session_state[rules_key] = rules
+
+    if st.button(f"➕ Add {label} rule", key=f"{rules_key}_add"):
+        rules.append({
+            "pos_scope": [], "criterion": "node",
+            "node_tag": "", "node_lang_attr": "", "node_lang_val": "",
+            "node_value_map": {}, "pattern": "", "flag": "",
+            "flx_value": "", "drv_value": "",
+        })
+        st.session_state[rules_key] = rules
+        st.rerun()
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Wizard steps
 # ─────────────────────────────────────────────────────────────────────────────
 STEPS = [
-    "Language", "Pronunciation", "POS", "Definitions",
-    "Examples", "Relations", "Etymology", "Sources", "References", "Convert",
+    "Language",
+    "Entry & Lemma",
+    "POS mapping",
+    "Subcategory flags",
+    "FLX= rules",
+    "DRV= rules",
+    "Glosses",
+    "Variants & Sub-entries",
+    "Convert",
 ]
 
-st.title("📖 Wiktionary Converter")
+st.title("📝 NooJ Dictionary Converter")
 st.markdown(f"*Working with: **{fname}***")
-wizard_progress(STEPS, st.session_state.wikt_step)
+wizard_progress(STEPS, st.session_state.nooj_step)
 
-step = st.session_state.wikt_step
+step = st.session_state.nooj_step
 
-# ── Step 0: Language & entry structure ───────────────────────────────────────
+# ── Step 0: Language selection ──────────────────────────────────────────────
 if step == 0:
-    st.markdown("### Language & entry structure")
+    st.markdown("### NooJ target language")
+    st.markdown(
+        "Select the language your NooJ dictionary is for. "
+        "If it is already implemented in NooJ, subsequent steps will show "
+        "guidance specific to that language's tagset. See [this page](https://nooj.univ-fcomte.fr/resources.html) for reference."
+    )
+
+    lang_options = list(NOOJ_LANGUAGES.keys())
+    current_lang = st.session_state.get("nooj_language", "")
+    default_idx = lang_options.index(current_lang) if current_lang in lang_options else 0
+
+    chosen = st.selectbox(
+        "NooJ language",
+        lang_options,
+        index=default_idx,
+        key="nooj_lang_sel",
+    )
+    st.session_state.nooj_language = chosen
+
+    if chosen and chosen != "Other":
+        author = NOOJ_LANGUAGES[chosen]["author"]
+        st.success(f"✅ **{chosen}** — {author}")
+        st.markdown(
+            "Language-specific hints will appear in each subsequent step."
+        )
+    else:
+        st.session_state.nooj_language = ""
+        custom = st.text_input(
+            "Specify your language name",
+            value="",
+            placeholder="e.g. Basque",
+        )
+        if custom:
+            st.session_state.nooj_language = custom
+
+    nav_buttons("nooj_step", len(STEPS), back=False)
+
+# ── Step 1: Entry & Lemma ────────────────────────────────────────────────────
+elif step == 1:
+    hint_box("Entry & Lemma")
+    st.markdown("### Entry & Lemma structure")
     all_tags = sorted({el.tag for el in root.iter()})
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.session_state.wikt_lang_name = st.text_input(
-            "Language name", value=st.session_state.wikt_lang_name,
-            placeholder="e.g. English")
-    with c2:
-        st.session_state.wikt_lang_code = st.text_input(
-            "Wiktionary language code", value=st.session_state.wikt_lang_code,
-            placeholder="e.g. eng")
+    tag_selector("Entry tag (wraps each dictionary entry)", "nooj_entry_tag", all_tags)
 
-    tag_selector("Entry tag (wraps each dictionary entry)", "wikt_entry_tag", all_tags)
+    if st.session_state.nooj_entry_tag:
+        count = sum(1 for _ in root.iter(st.session_state.nooj_entry_tag))
+        st.info(f"Found **{count}** `<{st.session_state.nooj_entry_tag}>` entries.")
+        child_tags = collect_child_tags(root, st.session_state.nooj_entry_tag)
 
-    if st.session_state.wikt_entry_tag:
-        count = sum(1 for _ in root.iter(st.session_state.wikt_entry_tag))
-        st.info(f"Found **{count}** `<{st.session_state.wikt_entry_tag}>` entries.")
-        child_tags = collect_child_tags(root, st.session_state.wikt_entry_tag)
-        tag_selector("Lemma tag (the headword text)", "wikt_lemma_path", child_tags)
-        if st.session_state.wikt_lemma_path:
-            show_sample_values(root, st.session_state.wikt_entry_tag, st.session_state.wikt_lemma_path)
+        tag_selector("Lemma tag (the headword/base form)", "nooj_lemma_path", child_tags)
+        if st.session_state.nooj_lemma_path:
+            show_sample_values(root, st.session_state.nooj_entry_tag, st.session_state.nooj_lemma_path)
+
+        tag_selector("Citation form tag (optional — used to detect special prefix patterns)",
+                     "nooj_citation_path", child_tags, allow_none=True)
+        if st.session_state.nooj_citation_path:
+            show_sample_values(root, st.session_state.nooj_entry_tag, st.session_state.nooj_citation_path)
+
         with st.expander("Preview: first 2 entries (raw XML)"):
-            for s in sample_entries(root, st.session_state.wikt_entry_tag):
+            for s in sample_entries(root, st.session_state.nooj_entry_tag):
                 st.code(s[:1500], language="xml")
 
-    ready = bool(st.session_state.wikt_lang_name and st.session_state.wikt_lang_code
-                 and st.session_state.wikt_entry_tag and st.session_state.wikt_lemma_path)
-    nav_buttons("wikt_step", len(STEPS), next_label="Next →", next_disabled=not ready, back=False)
+    ready = bool(st.session_state.nooj_entry_tag and st.session_state.nooj_lemma_path)
+    nav_buttons("nooj_step", len(STEPS), next_disabled=not ready, back=False)
 
-# ── Step 1: Pronunciation ─────────────────────────────────────────────────────
-elif step == 1:
-    st.markdown("### Pronunciation")
-    child_tags = collect_child_tags(root, st.session_state.wikt_entry_tag)
-
-    tag_selector("IPA transcription tag", "wikt_ipa_path", child_tags, allow_none=True)
-    if st.session_state.wikt_ipa_path:
-        show_sample_values(root, st.session_state.wikt_entry_tag, st.session_state.wikt_ipa_path)
-
-    tag_selector("Citation form tag (if it has additional morphological material)", "wikt_citation_path", child_tags, allow_none=True)
-
-    st.markdown("**Determinate form prefixes** (comma-separated, leave blank if not applicable)")
-    st.session_state.wikt_det_prefixes = st.text_input(
-        "Prefixes", value=st.session_state.wikt_det_prefixes,
-        placeholder="")
-
-    nav_buttons("wikt_step", len(STEPS))
-
-# ── Step 2: POS ───────────────────────────────────────────────────────────────
+# ── Step 1: POS mapping ──────────────────────────────────────────────────────
 elif step == 2:
-    st.markdown("### Part of speech")
-    child_tags = collect_child_tags(root, st.session_state.wikt_entry_tag)
+    hint_box("POS mapping")
+    st.markdown("### Part-of-speech mapping")
+    st.markdown(
+        "For each POS code found in your XML, provide the NooJ tag string "
+        "that should appear in the output (e.g. `N`, `V+Trans`, `ADJ`). "
+        "**Leave blank** to skip entries with that POS."
+    )
+    child_tags = collect_child_tags(root, st.session_state.nooj_entry_tag)
+    tag_selector("POS tag", "nooj_pos_path", child_tags, allow_none=True)
 
-    tag_selector("POS tag", "wikt_pos_path", child_tags, allow_none=True)
-
-    if st.session_state.wikt_pos_path:
-        pos_values = get_unique_text_values(root, st.session_state.wikt_entry_tag, st.session_state.wikt_pos_path)
+    if st.session_state.nooj_pos_path:
+        _pos_attrs = collect_element_attrs(root, st.session_state.nooj_entry_tag,
+                                           st.session_state.nooj_pos_path)
+        if _pos_attrs:
+            _pa_opts = ["(text content)"] + list(_pos_attrs.keys())
+            _cur_pa  = st.session_state.nooj_pos_attr or "(text content)"
+            _pa_sel  = st.selectbox("POS value is in", _pa_opts,
+                index=_pa_opts.index(_cur_pa) if _cur_pa in _pa_opts else 0,
+                format_func=lambda x: f"attribute `{x}`" if x != "(text content)" else "text content",
+                key="nooj_pos_attr_sel",
+                help="LIFT/FLEx: pick the attribute holding the POS value (e.g. value).")
+            st.session_state.nooj_pos_attr = "" if _pa_sel == "(text content)" else _pa_sel
+        _pos_spec = (f"{st.session_state.nooj_pos_path}@{st.session_state.nooj_pos_attr}"
+                     if st.session_state.nooj_pos_attr else st.session_state.nooj_pos_path)
+        pos_values = get_unique_field_values(root, st.session_state.nooj_entry_tag, _pos_spec)
         st.info(f"Found **{len(pos_values)}** unique POS codes.")
-        TRANS_OPTIONS = ["(not a verb)", "intransitive", "transitive", "transitive and intransitive"]
-        pos_labels = st.session_state.wikt_pos_labels.copy()
-        verb_trans = st.session_state.wikt_verb_transitivity.copy()
+        pos_map = st.session_state.nooj_pos_map.copy()
+        cols = st.columns(3)
+        for i, code in enumerate(pos_values):
+            with cols[i % 3]:
+                pos_map[code] = st.text_input(
+                    f"`{code}`",
+                    value=pos_map.get(code, ""),
+                    key=f"nooj_pos_{code}",
+                    placeholder="e.g. N",
+                )
+        st.session_state.nooj_pos_map = pos_map
 
-        pos_skip = st.session_state.wikt_pos_skip.copy()
-        st.caption(
-            "**head= category** fills automatically as the lowercase of **Section title**. "
-            "Override it manually if needed. Tick **Skip** to exclude a POS from the output entirely."
-        )
-        for code in pos_values:
-            st.markdown(f"---\n**`{code}`**")
-            c1, c2, c3, c4 = st.columns([3, 3, 3, 1])
-            with c1:
-                title = st.text_input("Section title", value=pos_labels.get(code, ("",""))[0],
-                                      key=f"wikt_pt_{code}", placeholder="e.g. Noun")
-            with c2:
-                # Auto-fill head= as lowercase of title; user can override
-                saved_head = pos_labels.get(code, ("",""))[1]
-                default_head = saved_head if saved_head else title.lower()
-                head = st.text_input("head= category", value=default_head,
-                                     key=f"wikt_ph_{code}", placeholder="e.g. noun")
-            with c3:
-                cur = verb_trans.get(code, "(not a verb)")
-                trans = st.selectbox("Verb transitivity", TRANS_OPTIONS,
-                                     index=TRANS_OPTIONS.index(cur) if cur in TRANS_OPTIONS else 0,
-                                     key=f"wikt_pv_{code}")
-            with c4:
-                skip = st.checkbox("Skip", value=pos_skip.get(code, False),
-                                   key=f"wikt_pskip_{code}",
-                                   help="Exclude entries with this POS from the output.")
-            pos_labels[code] = (title, head)
-            verb_trans[code] = trans if trans != "(not a verb)" else "none"
-            pos_skip[code] = skip
+    nav_buttons("nooj_step", len(STEPS))
 
-        st.session_state.wikt_pos_labels = pos_labels
-        st.session_state.wikt_verb_transitivity = verb_trans
-        st.session_state.wikt_pos_skip = pos_skip
-
-    nav_buttons("wikt_step", len(STEPS))
-
-# ── Step 3: Definitions ───────────────────────────────────────────────────────
+# ── Step 2: Subcategory flags ────────────────────────────────────────────────
 elif step == 3:
-    st.markdown("### Definitions & senses")
-    child_tags = collect_child_tags(root, st.session_state.wikt_entry_tag)
+    hint_box("Subcategory flags")
+    st.markdown("### Subcategory flags")
+    st.markdown(
+        "Define rules that add **`+TAG`** flags to NooJ entries based on properties "
+        "of each entry. Each rule specifies a criterion and produces one or more flags.\n\n"
+    )
+    child_tags = collect_child_tags(root, st.session_state.nooj_entry_tag)
+    pos_options = list(st.session_state.nooj_pos_map.keys())
 
-    tag_selector("Sense wrapper tag", "wikt_sense_path", child_tags, allow_none=True)
-    tag_selector("Subsense tag (optional, e.g. LIFT subsense)", "wikt_subsense_path",
-                 child_tags, allow_none=True,
-                 help_text="For LIFT/FLEx: glosses from subsenses are flattened into the parent sense.")
-    tag_selector("Definition text tag", "wikt_def_path", child_tags, allow_none=True)
+    rule_editor("nooj_flag_rules", "Subcategory flag", "Flag (e.g. +UNAMB)", "flag",
+                pos_options, child_tags, root)
 
-    if st.session_state.wikt_def_path:
-        attrs = {}
-        for el in root.iter(st.session_state.wikt_def_path):
-            for k, v in el.attrib.items():
-                attrs.setdefault(k, set()).add(v)
-        if attrs:
-            st.markdown("**Filter by language attribute** (to select English glosses only)")
-            c1, c2 = st.columns(2)
-            attr_keys = list(attrs.keys())
-            with c1:
-                chosen_attr = st.selectbox("Attribute name", ["(none)"] + attr_keys, key="wikt_def_attr_sel",
-                    index=(["(none)"] + attr_keys).index(st.session_state.wikt_def_lang_attr)
-                    if st.session_state.wikt_def_lang_attr in attr_keys else 0)
-                st.session_state.wikt_def_lang_attr = "" if chosen_attr == "(none)" else chosen_attr
+    nav_buttons("nooj_step", len(STEPS))
+
+# ── Step 3: FLX= rules ──────────────────────────────────────────────────────
+elif step == 4:
+    hint_box("FLX= rules")
+    st.markdown("### FLX= inflectional paradigm rules")
+    st.markdown(
+        "Define rules that assign a `+FLX=VALUE` tag. Rules are evaluated **in order** "
+        "and the first matching rule wins for each entry.\n\n"
+    )
+    child_tags = collect_child_tags(root, st.session_state.nooj_entry_tag)
+    pos_options = list(st.session_state.nooj_pos_map.keys())
+
+    rule_editor("nooj_flx_rules", "FLX", "FLX value (e.g. VE_N)", "flx",
+                pos_options, child_tags, root)
+
+    nav_buttons("nooj_step", len(STEPS))
+
+# ── Step 4: DRV= rules ──────────────────────────────────────────────────────
+elif step == 5:
+    hint_box("DRV= rules")
+    st.markdown("### DRV= derivational paradigm rules")
+    st.markdown(
+        "Define rules that assign a `+DRV=VALUE` tag. Same structure as FLX rules. "
+        "First matching rule wins.\n\n"
+    )
+    child_tags = collect_child_tags(root, st.session_state.nooj_entry_tag)
+    pos_options = list(st.session_state.nooj_pos_map.keys())
+
+    rule_editor("nooj_drv_rules", "DRV", "DRV value (e.g. VE)", "drv",
+                pos_options, child_tags, root)
+
+    nav_buttons("nooj_step", len(STEPS))
+
+# ── Step 5: Glosses ──────────────────────────────────────────────────────────
+elif step == 6:
+    hint_box("Glosses")
+    st.markdown("### Glosses")
+    st.markdown(
+        "Configure gloss fields that will appear in the output as `+KEY=\"value\"`. "
+        "Each gloss is pulled from a specific XML tag filtered by a language attribute. "
+        "For **LIFT/FLEx** files, the gloss text is in a `<text>` child of the gloss tag "
+        "(e.g. `gloss[@lang='en']/text`) — configure the **text sub-path** field below."
+    )
+    child_tags = collect_child_tags(root, st.session_state.nooj_entry_tag)
+    # Sense tag: configurable here for LIFT compatibility
+    _st_opts = ["(default: Sens)"] + child_tags
+    _cur_st  = st.session_state.nooj_sense_tag or "(default: Sens)"
+    _st_sel  = st.selectbox("Sense wrapper tag", _st_opts,
+        index=_st_opts.index(_cur_st) if _cur_st in _st_opts else 0,
+        key="nooj_sense_tag_sel",
+        help="Tag wrapping each sense. Default is 'Sens' (Mwotlap). For LIFT use 'sense'.")
+    st.session_state.nooj_sense_tag = "" if _st_sel == "(default: Sens)" else _st_sel
+    gloss_configs = st.session_state.nooj_gloss_configs.copy()
+
+    for i, gc in enumerate(gloss_configs):
+        with st.expander(f"Gloss {i+1}: +{gc.get('nooj_key','?')}=\"...\"", expanded=True):
+            c1, c2 = st.columns([5,1])
             with c2:
-                if st.session_state.wikt_def_lang_attr:
-                    vals = sorted(attrs.get(st.session_state.wikt_def_lang_attr, []))
-                    chosen_val = st.selectbox("Attribute value", vals, key="wikt_def_val_sel",
-                        index=vals.index(st.session_state.wikt_def_lang_value)
-                        if st.session_state.wikt_def_lang_value in vals else 0)
-                    st.session_state.wikt_def_lang_value = chosen_val
+                if st.button("🗑 Remove", key=f"nooj_gloss_rm_{i}"):
+                    gloss_configs.pop(i)
+                    st.session_state.nooj_gloss_configs = gloss_configs
+                    st.rerun()
+            col1, col2, col3, col4, col5 = st.columns(5)
+            with col1:
+                gc_tag = st.selectbox("XML tag", ["(none)"] + child_tags,
+                    index=(["(none)"] + child_tags).index(gc.get("tag","")) if gc.get("tag","") in child_tags else 0,
+                    key=f"nooj_gtag_{i}")
+                gc["tag"] = "" if gc_tag == "(none)" else gc_tag
+            with col2:
+                gc["lang_attr"] = st.text_input("Language attr", value=gc.get("lang_attr",""),
+                    key=f"nooj_gla_{i}", placeholder="")
+            with col3:
+                gc["lang_val"] = st.text_input("Language value", value=gc.get("lang_val",""),
+                    key=f"nooj_glv_{i}", placeholder="e.g. eng")
+            with col4:
+                gc["nooj_key"] = st.text_input("NooJ key", value=gc.get("nooj_key",""),
+                    key=f"nooj_gkey_{i}", placeholder="e.g. EN")
+            with col5:
+                gc["text_subpath"] = st.text_input("Text sub-path",
+                    value=gc.get("text_subpath",""),
+                    key=f"nooj_gtsp_{i}", placeholder="e.g. text",
+                    help="LIFT: the gloss text is inside a <text> child. Enter 'text' here.")
+        gloss_configs[i] = gc
+
+    st.session_state.nooj_gloss_configs = gloss_configs
+
+    if st.button("➕ Add gloss field"):
+        gloss_configs.append({"tag":"","lang_attr":"","lang_val":"","nooj_key":""})
+        st.session_state.nooj_gloss_configs = gloss_configs
+        st.rerun()
+
+    nav_buttons("nooj_step", len(STEPS))
+
+# ── Step 6: Variants & Sub-entries ──────────────────────────────────────────
+elif step == 7:
+    hint_box("Variants & Sub-entries")
+    st.markdown("### Variants & Sub-entries")
+    child_tags = collect_child_tags(root, st.session_state.nooj_entry_tag)
+
+    st.markdown("**Variants** — alternate forms of the same lemma")
+    tag_selector("Variant wrapper tag", "nooj_variant_path", child_tags, allow_none=True,
+                 help_text="Tag wrapping each variant. Mwotlap: inside Lemme. LIFT: direct child of entry (variant).")
+    if st.session_state.nooj_variant_path:
+        st.caption(
+            "For **LIFT/FLEx** files, the variant form text is inside "
+            "`<form lang=\"...\">/text` — configure the form path and language filter below."
+        )
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.session_state.nooj_variant_form_path = st.text_input(
+                "Form path inside variant (blank = use ReprésentationDeForme)",
+                value=st.session_state.nooj_variant_form_path,
+                placeholder="e.g. ./form/text",
+                help="LIFT: enter ./form/text. Leave blank for Mwotlap-style."
+            )
+        with c2:
+            st.session_state.nooj_variant_lang_attr = st.text_input(
+                "Language attribute on form element",
+                value=st.session_state.nooj_variant_lang_attr,
+                placeholder="e.g. lang",
+            )
+        with c3:
+            st.session_state.nooj_variant_lang_val = st.text_input(
+                "Language value to select",
+                value=st.session_state.nooj_variant_lang_val,
+                placeholder="e.g. seh",
+            )
+        st.session_state.nooj_variant_lemma_override = st.checkbox(
+            "Output variant as: `variant_form, main_lemma, info` (lemma override)",
+            value=st.session_state.nooj_variant_lemma_override,
+            help="If checked, the variant form points back to the main lemma in the NooJ entry."
+        )
 
     st.markdown("---")
-    st.markdown("**Semantic / usage labels** (optional)")
-    tag_selector("Semantic label tag", "wikt_sem_label_path", child_tags, allow_none=True)
+    st.markdown("**Sub-entries** — embedded entries (e.g. phrasal entries, collocations)")
+    tag_selector("Sub-entry tag", "nooj_subentry_tag", child_tags, allow_none=True)
 
-    if st.session_state.wikt_sem_label_path:
-        sem_codes = get_unique_text_values(root, st.session_state.wikt_entry_tag, st.session_state.wikt_sem_label_path)
-        sem_map = st.session_state.wikt_sem_label_map.copy()
-        if sem_codes:
-            st.markdown(f"Found **{len(sem_codes)}** label codes. Map each to a Wiktionary label (blank = skip):")
-            cols = st.columns(3)
-            for i, code in enumerate(sem_codes):
-                with cols[i % 3]:
-                    sem_map[code] = st.text_input(f"`{code}`", value=sem_map.get(code, ""),
-                                                  key=f"wikt_sem_{code}", placeholder="e.g. figurative")
-            st.session_state.wikt_sem_label_map = sem_map
+    if st.session_state.nooj_subentry_tag:
+        sub_child_tags = sorted({child.tag for s in root.iter(st.session_state.nooj_subentry_tag) for child in s.iter() if child is not s})
+        tag_selector("Sub-entry lemma tag", "nooj_subentry_lemma_path", sub_child_tags, allow_none=True)
+        tag_selector("Sub-entry POS tag", "nooj_subentry_pos_path", sub_child_tags, allow_none=True)
+        st.session_state.nooj_subentry_strip_prefix = st.checkbox(
+            "Strip parent-form prefix from sub-entry form (e.g. 'n-age vakvak' → 'age vakvak')",
+            value=st.session_state.nooj_subentry_strip_prefix,
+        )
 
-    nav_buttons("wikt_step", len(STEPS))
+    nav_buttons("nooj_step", len(STEPS))
 
-# ── Step 4: Examples ──────────────────────────────────────────────────────────
-elif step == 4:
-    st.markdown("### Usage examples")
-    st.info(
-        "For **corpus-linked** dictionaries, configure the corpus link tag below. For **LIFT** files, leave that as *(none)* and configure the source and translation paths instead."
-    )
-    child_tags = collect_child_tags(root, st.session_state.wikt_entry_tag)
-
-    tag_selector("Example wrapper tag", "wikt_example_path", child_tags, allow_none=True)
-    tag_selector("Corpus link tag (contains the URL/DOI)", "wikt_corpus_link_path", child_tags, allow_none=True)
-
-    if st.session_state.wikt_example_path:
-        ex_child_tags = sorted({child.tag for ex in root.iter(st.session_state.wikt_example_path) for child in ex})
-        tag_selector("Example text tag (used for all languages)", "wikt_ex_text_path", ex_child_tags, allow_none=True)
-
-        if st.session_state.wikt_ex_text_path:
-            ex_attrs = {}
-            for el in root.iter(st.session_state.wikt_ex_text_path):
-                for k, v in el.attrib.items():
-                    ex_attrs.setdefault(k, set()).add(v)
-            if ex_attrs:
-                attr_keys = list(ex_attrs.keys())
-                lang_attr = st.selectbox("Language attribute on text tags", attr_keys, key="wikt_ex_lang_attr_sel")
-                st.session_state.wikt_ex_lang_attr = lang_attr
-                lang_vals = sorted(ex_attrs.get(lang_attr, []))
-                c1, c2 = st.columns(2)
-                with c1:
-                    mlv = st.selectbox("Source language value", lang_vals, key="wikt_mlv_sel",
-                        index=lang_vals.index(st.session_state.wikt_ex_mlv_lang_value)
-                        if st.session_state.wikt_ex_mlv_lang_value in lang_vals else 0)
-                    st.session_state.wikt_ex_mlv_lang_value = mlv
-                with c2:
-                    eng = st.selectbox("Translation language value", lang_vals, key="wikt_eng_sel",
-                        index=lang_vals.index(st.session_state.wikt_ex_eng_lang_value)
-                        if st.session_state.wikt_ex_eng_lang_value in lang_vals else 0)
-                    st.session_state.wikt_ex_eng_lang_value = eng
-
-        if not st.session_state.wikt_corpus_link_path and st.session_state.wikt_ex_text_path:
-            st.markdown("---")
-            st.markdown("**Translation path (LIFT / no corpus link)**")
-            st.caption("Path from each example element to its translation text. In LIFT/FLEx typically ./translation/form/text")
-            _ex_sample = list(iter_path(root, st.session_state.wikt_example_path,
-                                        st.session_state.wikt_entry_tag))[:20]
-            _tp_opts = ["(none)"] + sorted({
-                "./" + "/".join(p)
-                for ex in _ex_sample
-                for p in _walk_paths(ex)
-            })
-            _cur_tp = st.session_state.wikt_ex_translation_path or "(none)"
-            _tp_sel = st.selectbox("Translation text path", _tp_opts,
-                index=_tp_opts.index(_cur_tp) if _cur_tp in _tp_opts else 0,
-                key="wikt_ex_transl_path_sel")
-            st.session_state.wikt_ex_translation_path = "" if _tp_sel == "(none)" else _tp_sel
-            if st.session_state.wikt_ex_translation_path and st.session_state.wikt_ex_lang_attr:
-                _tlv = sorted({
-                    el.get(st.session_state.wikt_ex_lang_attr, "")
-                    for ex in iter_path(root, st.session_state.wikt_example_path,
-                                        st.session_state.wikt_entry_tag)
-                    for el in ex.findall(to_relative_xpath(st.session_state.wikt_ex_translation_path))
-                    if el.get(st.session_state.wikt_ex_lang_attr, "")
-                })
-                if _tlv:
-                    _cur_tlv = st.session_state.wikt_ex_translation_lang_value
-                    st.session_state.wikt_ex_translation_lang_value = st.selectbox(
-                        "Translation language value", _tlv,
-                        index=_tlv.index(_cur_tlv) if _cur_tlv in _tlv else 0,
-                        key="wikt_ex_transl_lang_sel")
-
-    nav_buttons("wikt_step", len(STEPS))
-
-# ── Step 5: Semantic relations ────────────────────────────────────────────────
-elif step == 5:
-    st.markdown("### Semantic relations (synonyms & antonyms)")
-    child_tags = collect_child_tags(root, st.session_state.wikt_entry_tag)
-
-    tag_selector("Relation wrapper tag", "wikt_rel_path", child_tags, allow_none=True)
-    if st.session_state.wikt_rel_path:
-        _ref_attrs = collect_element_attrs(root, st.session_state.wikt_entry_tag,
-                                           st.session_state.wikt_rel_path)
-        if any(a in _ref_attrs for a in ("ref", "guid")):
-            st.session_state.wikt_rel_resolve_guid = st.checkbox(
-                "Resolve relation targets from internal IDs (LIFT/FLEx)",
-                value=st.session_state.wikt_rel_resolve_guid,
-                help="Tick this to convert GUID-based refs to human-readable lemmas.")
-            if st.session_state.wikt_rel_resolve_guid:
-                _id_opts = sorted(_ref_attrs.keys())
-                _cur_id  = st.session_state.wikt_rel_entry_id_attr
-                st.session_state.wikt_rel_entry_id_attr = st.selectbox(
-                    "Entry ID attribute (matched against relation target)",
-                    _id_opts,
-                    index=_id_opts.index(_cur_id) if _cur_id in _id_opts else 0,
-                    key="wikt_rel_id_attr_sel")
-        rel_child_tags = sorted({child.tag
-            for rel in iter_path(root, st.session_state.wikt_rel_path,
-                                 st.session_state.wikt_entry_tag)
-            for child in rel})
-        tag_selector("Relation type tag", "wikt_rel_type_path", rel_child_tags, allow_none=True)
-        tag_selector("Relation target tag", "wikt_rel_target_path", rel_child_tags, allow_none=True)
-        if st.session_state.wikt_rel_type_path:
-            _rel_type_spec = (f"{st.session_state.wikt_rel_type_path}@{st.session_state.wikt_rel_type_attr}"
-                              if st.session_state.get("wikt_rel_type_attr") else st.session_state.wikt_rel_type_path)
-            type_vals = get_unique_field_values(root, st.session_state.wikt_entry_tag, _rel_type_spec)
-            c1, c2 = st.columns(2)
-            with c1:
-                opts = ["(none)"] + type_vals
-                syn = st.selectbox("Value meaning 'synonym'", opts, key="wikt_syn_sel",
-                    index=opts.index(st.session_state.wikt_synonym_value) if st.session_state.wikt_synonym_value in opts else 0)
-                st.session_state.wikt_synonym_value = "" if syn == "(none)" else syn
-            with c2:
-                ant = st.selectbox("Value meaning 'antonym'", opts, key="wikt_ant_sel",
-                    index=opts.index(st.session_state.wikt_antonym_value) if st.session_state.wikt_antonym_value in opts else 0)
-                st.session_state.wikt_antonym_value = "" if ant == "(none)" else ant
-
-    nav_buttons("wikt_step", len(STEPS))
-
-# ── Step 6: Etymology ─────────────────────────────────────────────────────────
-elif step == 6:
-    st.markdown("### Etymology (optional)")
-    child_tags = collect_child_tags(root, st.session_state.wikt_entry_tag)
-
-    tag_selector("Etymon wrapper tag", "wikt_etym_path", child_tags, allow_none=True)
-    if st.session_state.wikt_etym_path:
-        etym_child_tags = sorted({child.tag
-            for e in iter_path(root, st.session_state.wikt_etym_path,
-                               st.session_state.wikt_entry_tag)
-            for child in e})
-        tag_selector("Form tag (source/reconstructed form)", "wikt_etym_form_path", etym_child_tags, allow_none=True)
-        tag_selector("Language tag (source language name)", "wikt_etym_lang_path", etym_child_tags, allow_none=True)
-        _etym_wrapper_attrs = collect_element_attrs(root, st.session_state.wikt_entry_tag,
-                                                    st.session_state.wikt_etym_path)
-        if _etym_wrapper_attrs:
-            _src_opts = ["(none)"] + list(_etym_wrapper_attrs.keys())
-            _cur_src  = st.session_state.wikt_etym_source_attr or "(none)"
-            _src_sel  = st.selectbox(
-                "Source language attribute on etymology element (LIFT: e.g. source)",
-                _src_opts, index=_src_opts.index(_cur_src) if _cur_src in _src_opts else 0,
-                key="wikt_etym_src_attr_sel")
-            st.session_state.wikt_etym_source_attr = "" if _src_sel == "(none)" else _src_sel
-        _etym_fld_types = sorted({
-            f.get("type", "")
-            for e in iter_path(root, st.session_state.wikt_etym_path,
-                               st.session_state.wikt_entry_tag)
-            for f in e.findall("field") if f.get("type", "")
-        })
-        if _etym_fld_types:
-            _cf_opts = ["(none)"] + _etym_fld_types
-            _cur_cf  = st.session_state.wikt_etym_comment_field_type or "(none)"
-            _cf_sel  = st.selectbox(
-                "Field type containing the source form (LIFT: e.g. comment)",
-                _cf_opts, index=_cf_opts.index(_cur_cf) if _cur_cf in _cf_opts else 0,
-                key="wikt_etym_comment_field_sel")
-            st.session_state.wikt_etym_comment_field_type = "" if _cf_sel == "(none)" else _cf_sel
-
-    nav_buttons("wikt_step", len(STEPS))
-
-# ── Step 7: Corpus sources ────────────────────────────────────────────────────
-elif step == 7:
-    st.markdown("### Corpus source citations")
-    corpus_tag = st.session_state.wikt_corpus_link_path
-    if not corpus_tag:
-        st.info("No corpus link tag configured. Skipping.")
-    else:
-        corpus_ids = collect_corpus_ids(root, corpus_tag)
-        if not corpus_ids:
-            st.info("No Pangloss-style corpus IDs found.")
-        else:
-            st.markdown(
-                f"Found **{len(corpus_ids)}** corpus sources. "
-                "Fill in metadata for citation formatting (leave blank for bare URL)."
-            )
-            sources = st.session_state.wikt_corpus_sources.copy()
-            for pid, example_url in corpus_ids.items():
-                st.markdown(f"---\n**`{pid}`** — <small>{example_url}</small>", unsafe_allow_html=True)
-                c1, c2 = st.columns(2)
-                with c1:
-                    at = st.text_input("Author, ''Title''", value=sources.get(pid, {}).get("author_title", ""),
-                                       key=f"wikt_at_{pid}", placeholder="e.g. Jane Smith, ''The Story''")
-                with c2:
-                    desc = st.text_input("Description", value=sources.get(pid, {}).get("description", ""),
-                                         key=f"wikt_desc_{pid}", placeholder="")
-                sources[pid] = {"author_title": at, "description": desc}
-            st.session_state.wikt_corpus_sources = sources
-
-    nav_buttons("wikt_step", len(STEPS))
-
-# ── Step 8: References ────────────────────────────────────────────────────────
+# ── Step 7: Convert & Download ───────────────────────────────────────────────
 elif step == 8:
-    st.markdown("### Reference templates")
-    st.markdown(
-        "Define which Wiktionary reference template(s) should appear in the "
-        "**===References===** section of every generated entry. You can use "
-        "one of Wiktionary's existing language-specific reference templates — "
-        "browse what's available at "
-        "[Category:Reference templates by language]"
-        "(https://en.wiktionary.org/wiki/Category:Reference_templates_by_language) "
-        "— or write your own template call."
-    )
-    st.caption(
-        "Each row is rendered as its own `*` bullet line. Use `{lemma}` for the "
-        "entry headword and `{base}` for the determinate/citation base form "
-        "(falls back to `{lemma}` when there is no base form). `{lang_code}` "
-        "inserts the language code from Step 1."
-    )
-
-    if not st.session_state.get("wikt_reference_templates"):
-        default_code = st.session_state.wikt_lang_code or "lang_code"
-        st.session_state.wikt_reference_templates = [
-            {
-                "name": "Lexicon dictionary",
-                "template": f"{{{{R:{default_code}:lex|{{lemma}}}}}}",
-                "enabled": True,
-            }
-        ]
-
-    templates = st.session_state.wikt_reference_templates
-
-    remove_idx = None
-    for i, ref in enumerate(templates):
-        st.markdown(f"---\n**Reference {i + 1}**")
-        c1, c2, c3, c4 = st.columns([3, 5, 1, 1])
-        with c1:
-            ref["name"] = st.text_input(
-                "Label (for your reference only)", value=ref.get("name", ""),
-                key=f"wikt_ref_name_{i}", placeholder="e.g. my dictionary")
-        with c2:
-            ref["template"] = st.text_input(
-                "Template call", value=ref.get("template", ""),
-                key=f"wikt_ref_tpl_{i}",
-                placeholder="")
-        with c3:
-            ref["enabled"] = st.checkbox(
-                "On", value=ref.get("enabled", True), key=f"wikt_ref_on_{i}")
-        with c4:
-            if st.button("🗑️", key=f"wikt_ref_del_{i}") and len(templates) > 1:
-                remove_idx = i
-
-    if remove_idx is not None:
-        templates.pop(remove_idx)
-        st.rerun()
-
-    if st.button("+ Add another reference template"):
-        templates.append({"name": "", "template": "", "enabled": True})
-        st.rerun()
-
-    st.session_state.wikt_reference_templates = templates
-
-    if any(r.get("enabled") and r.get("template", "").strip() for r in templates):
-        st.markdown("**Preview** (using a placeholder lemma):")
-        preview_fields = {
-            "{lemma}": "example",
-            "{base}": "example",
-            "{lang_code}": st.session_state.wikt_lang_code or "lang_code",
-        }
-        preview_lines = []
-        for ref in templates:
-            if not ref.get("enabled") or not ref.get("template", "").strip():
-                continue
-            rendered = ref["template"]
-            for placeholder, value in preview_fields.items():
-                rendered = rendered.replace(placeholder, value)
-            preview_lines.append("* " + rendered)
-        st.code("===References===\n" + "\n".join(preview_lines), language=None)
-
-    nav_buttons("wikt_step", len(STEPS))
-
-# ── Step 9: Convert & download ────────────────────────────────────────────────
-elif step == 9:
+    hint_box("Convert")
     st.markdown("### Convert & Download")
 
-    cfg = {k: st.session_state[k] for k in WIKT_DEFAULTS}
-    cfg["wikt_reference_templates"] = st.session_state.get("wikt_reference_templates", [])
+    cfg = {k: st.session_state[k] for k in NOOJ_DEFAULTS}
 
     with st.expander("Configuration summary"):
-        st.json({k: v for k, v in cfg.items() if not isinstance(v, dict) or len(str(v)) < 200})
+        st.markdown(f"- **Entry tag:** `{cfg['nooj_entry_tag']}`")
+        st.markdown(f"- **Lemma tag:** `{cfg['nooj_lemma_path']}`")
+        st.markdown(f"- **POS codes mapped:** {sum(1 for v in cfg['nooj_pos_map'].values() if v)}")
+        st.markdown(f"- **Flag rules:** {len(cfg['nooj_flag_rules'])}")
+        st.markdown(f"- **FLX rules:** {len(cfg['nooj_flx_rules'])}")
+        st.markdown(f"- **DRV rules:** {len(cfg['nooj_drv_rules'])}")
+        st.markdown(f"- **Gloss fields:** {len(cfg['nooj_gloss_configs'])}")
+        st.markdown(f"- **Variant tag:** `{cfg['nooj_variant_path'] or '(none)'}`")
+        st.markdown(f"- **Sub-entry tag:** `{cfg['nooj_subentry_tag'] or '(none)'}`")
+
+    st.session_state.nooj_dedup = st.checkbox(
+        "Suppress duplicate entries", value=st.session_state.nooj_dedup
+    )
+    cfg["nooj_dedup"] = st.session_state.nooj_dedup
 
     c1, c2 = st.columns([1, 5])
     with c1:
         if st.button("← Back"):
-            st.session_state.wikt_step -= 1
+            st.session_state.nooj_step -= 1
             st.rerun()
     with c2:
         if st.button("🚀 Run conversion", type="primary"):
             with st.spinner("Converting…"):
                 try:
                     result = run_conversion(root, cfg)
-                    st.session_state.wikt_output = result
-                    st.success(f"✅ Done — {len(result):,} characters generated.")
+                    st.session_state.nooj_output = result
+                    lines = result.count("\n") + 1 if result else 0
+                    st.success(f"✅ Done — {lines:,} entries generated.")
                 except Exception as e:
                     st.error(f"❌ {e}")
                     import traceback; st.code(traceback.format_exc())
 
-    if st.session_state.wikt_output:
-        lang = st.session_state.wikt_lang_name.replace(" ", "_")
-        st.download_button("⬇️ Download wikitext", st.session_state.wikt_output.encode("utf-8"),
-                           file_name=f"{lang}_wiktionary.txt", mime="text/plain")
-        st.markdown("#### Preview (first 3000 characters)")
-        st.code(st.session_state.wikt_output[:3000], language=None)
+    if st.session_state.nooj_output:
+        st.download_button(
+            "⬇️ Download .txt file copiable in a NooJ .dic file",
+            st.session_state.nooj_output.encode("utf-8"),
+            file_name="dictionary.txt",
+            mime="text/plain",
+        )
+        st.markdown("#### Preview (first 50 lines)")
+        preview = "\n".join(st.session_state.nooj_output.splitlines()[:50])
+        st.code(preview, language=None)
