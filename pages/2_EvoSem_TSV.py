@@ -1,6 +1,5 @@
 """
 LP — EvoSem TSV converter
-Converts a lexical XML dictionary to a .tsv file for use with EvoSem.
 """
 
 import csv
