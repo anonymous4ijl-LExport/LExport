@@ -7,7 +7,7 @@ various output formats. Upload your XML dictionary once, then convert in any of 
 
 | Converter | Status | Description |
 |-----------|--------|-------------|
-| Wiktionary entries | ✅  | Wiktionary copiable wikitext|
+| Wiktionary | ✅  | Wiktionary copiable wikitext|
 | NooJ | ✅  | NooJ `.dic` dictionary format |
-| DIG4EL parallel corpus | ✅ | `.json` parallel corpus of examples |
-| EvoSem reflex table | ✅ | `.tsv` table for EvoSem |
+| DIG4EL | ✅ | `.json` parallel corpus of examples |
+| EvoSem | ✅ | `.tsv` table for EvoSem |
