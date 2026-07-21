@@ -30,7 +30,7 @@ root, fname = require_xml()
 #   "hints": {step_name: markdown_string}
 # }
 # The hints dict keys must match the STEPS list exactly.
-# Leave hints blank ("") to show nothing for that step.
+# Hints to be updated with actual references to each NooJ module with the help of the NooJ community.
 # ─────────────────────────────────────────────────────────────────────────────
 NOOJ_LANGUAGES = {
     "Other": {
@@ -272,7 +272,7 @@ NOOJ_LANGUAGES = {
         "author": "Fabio Meroni, Bergamo University",
         "hints": {
             "Entry & Lemma": "",
-            "POS mapping": "ADJ Adjective ADV Adverb COORD Coordinator DEI Deictic DIR Directional INT Interjection LOC Locative N Noun NUM Numeral PART Particle POSS Possessive classifier POSTV Postverb PRO Pronoun INTENS Intensifier REL Relativizer SUB Subordinator TAM Tense, Aspect, Mood markers V Verb DET Determiner POSS Possessive Classifier TOP Clause topicalisers QTF Quantifiers",
+            "POS mapping": "ADJ Adjective, ADV Adverb, COORD Coordinator, DEI Deictic, DIR Directional, INT Interjection, LOC Locative, N Noun, NUM Numeral, PART Particle, POSS Possessive classifier, POSTV Postverb, PRO Pronoun, INTENS Intensifier, REL Relativizer, SUB Subordinator, TAM Tense, Aspect, Mood markers, V Verb, DET Determiner, TOP Clause topicalisers, QTF Quantifiers",
 
             "FLX= rules": "",
             "DRV= rules": "",
