@@ -19,7 +19,7 @@ def _strip_namespaces(root):
 
 
 st.set_page_config(
-    page_title="LEXport",
+    page_title="LExport",
     page_icon="📚",
     layout="wide",
 )
@@ -49,9 +49,9 @@ with st.sidebar:
 # ─────────────────────────────────────────────────────────────────────────────
 # Home page content
 # ─────────────────────────────────────────────────────────────────────────────
-st.title("LEXport")
+st.title("LExport")
 st.markdown(
-    "Welcome to **LEXport**, a toolkit for converting lexical XML dictionaries "
+    "Welcome to **LExport**, a toolkit for converting lexical XML dictionaries "
     "into various output formats. Upload your XML file once here, then use "
     "the sidebar to navigate to any converter."
 )
@@ -201,6 +201,6 @@ for col, c in zip(cols, converters):
 
 st.markdown("---")
 st.markdown(
-    "<small style='color:#aaa'>LEXport</small>",
+    "<small style='color:#aaa'>LExport</small>",
     unsafe_allow_html=True,
 )
