@@ -10,4 +10,4 @@ various output formats. Upload your XML dictionary once, then convert in any of 
 | Wiktionary entries | ✅  | Wiktionary copiable wikitext|
 | NooJ | ✅  | NooJ `.dic` dictionary format |
 | DIG4EL parallel corpus | ✅ | `.json` parallel corpus of examples |
-| EvoSem reflex table | ✅ | Tab-separated export for EvoSem |
+| EvoSem reflex table | ✅ | `.tsv` table for EvoSem |
