@@ -176,7 +176,7 @@ converters = [
         "name": "DIG4EL DCQs",
         "desc": (
             "Export example sentences and their translations as a "
-            "DIG4EL Contextualised Questionnaire JSON file."
+            "DIG4EL DCQ/SP JSON file."
         ),
         "page": "pages/4_DIG4EL.py",
     },
