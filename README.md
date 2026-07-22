@@ -18,7 +18,7 @@ This project is deployed on **Streamlit Community Cloud**. Because Streamlit Com
 
 If the deployed application is unavailable during evaluation, it can be easily redeployed by:
 
-1. Opening the project in Streamlit Community Cloud.
+1. Opening the project in Streamlit Community Cloud (https://streamlit.io/).
 2. Selecting this GitHub repository.
 3. Deploying the application again.
 
