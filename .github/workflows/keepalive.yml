@@ -20,7 +20,7 @@ jobs:
 
       - name: Visit the app
         env:
-          APP_URL: https://YOUR-APP-NAME.streamlit.app/
+          APP_URL: https://lexport-anonymous.streamlit.app/
         run: |
           python - <<'EOF'
           import os
