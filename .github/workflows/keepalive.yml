@@ -2,19 +2,42 @@ name: Keep Streamlit App Alive
 
 on:
   schedule:
-    - cron: "0 */4 * * *"
-  workflow_dispatch:
+    - cron: '0 */8 * * *'   # every 8 hours
+  workflow_dispatch:         # lets you run it manually to test
 
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping the Streamlit app
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Playwright
         run: |
-          echo "Pinging https://lexport-anonymous.streamlit.app/ ..."
-          status=$(curl -s -o /dev/null -w "%{http_code}" -L https://lexport-anonymous.streamlit.app/)
-          echo "Received HTTP status: $status"
-          if [ "$status" -ge 400 ]; then
-            echo "App did not respond successfully."
-            exit 1
-          fi
+          pip install playwright
+          playwright install --with-deps chromium
+
+      - name: Visit the app
+        env:
+          APP_URL: https://YOUR-APP-NAME.streamlit.app/
+        run: |
+          python - <<'EOF'
+          import os
+          from playwright.sync_api import sync_playwright
+
+          with sync_playwright() as p:
+              browser = p.chromium.launch()
+              page = browser.new_page()
+              page.goto(os.environ["APP_URL"], wait_until="domcontentloaded")
+              page.wait_for_timeout(10000)
+              # Wake it up if it was already asleep
+              btn = page.get_by_role("button", name="Yes, get this app back up!")
+              if btn.count() > 0:
+                  btn.first.click()
+                  page.wait_for_timeout(30000)
+                  print("App was asleep: wake-up clicked")
+              else:
+                  print("App was awake")
+              browser.close()
+          EOF
